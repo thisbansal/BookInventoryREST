@@ -7,7 +7,6 @@ import java.sql.Statement;
 import java.util.Properties;
 import java.sql.Connection;
 
-
 public class CRUDSupport {
 
 	/**
@@ -22,9 +21,10 @@ public class CRUDSupport {
 		connectionProperties.put("password", "Assignm3nt1");
 		String databseUrl = "jdbc:mysql://swinmysql-instance1.csfetredihe2.us-east-1.rds.amazonaws.com/";
 		try {
+			Class.forName("com.mysql.jdbc.Driver");
 			connectionObject = DriverManager.getConnection(databseUrl,
 					connectionProperties);
-		} catch (SQLException e) {
+		} catch (SQLException | ClassNotFoundException e) {
 			e.printStackTrace();
 		}
 		return connectionObject;
@@ -87,7 +87,7 @@ public class CRUDSupport {
 	 *         or borrowed
 	 */
 	public static String isBookValid(Connection conn, Integer iSBNumberInteger) {
-		String result = "Invalid Book ID";
+		String result = "nobookfound";
 		Statement stmt = null;
 		String queryString = "SELECT `ISBN`,`AVAILABILITY`,`idBook` FROM `waaBookInventoryDB`.`Book` WHERE `ISBN` = "
 				+ iSBNumberInteger.toString();
@@ -98,13 +98,16 @@ public class CRUDSupport {
 				int isbn = resultSet.getInt(1);
 				String availabilityString = resultSet.getString(2);
 				int idBook = resultSet.getInt(3);
+				
 				if (isbn == iSBNumberInteger
 						&& availabilityString.equalsIgnoreCase("available")) {
-					result = "Book found";
+					result = "successfully borrowed";
+					
 					BookInventoryServiceREST.bookId = idBook;
 				} else if (isbn == iSBNumberInteger
 						&& availabilityString.equalsIgnoreCase("Borrowed")) {
-					result = "Borrowed";
+					result = "alreadyborrowed";
+					
 					BookInventoryServiceREST.bookId = idBook;
 					break;
 				}
@@ -127,20 +130,19 @@ public class CRUDSupport {
 	 * Returns the said book
 	 * @param conn Connection to the database
 	 * @param iSBNNumberInteger ISBN Number of the provided book
+	 * @param bookIdInteger 
 	 * @return String with information about the returning book
 	 */
-	public static String returnBook(Connection conn, Integer iSBNNumberInteger){
-		String resultString = "Some error occured. Item couldn't be returned.";
+	public static void returnBook(Connection conn, Integer iSBNNumberInteger, Integer bookIdInteger){
 		String queryStringForChangingFieldValue = "UPDATE `waaBookInventoryDB`.`Book` SET `Availability`='Available' WHERE `ISBN`='"
 				+ iSBNNumberInteger + "'";
-		String deleteColumnFromBorrowTableString = "DELETE FROM `waaBookInventoryDB`.`BooksBorrowed`WHERE idBook = "+BookInventoryServiceREST.bookId;
+		String deleteColumnFromBorrowTableString = "DELETE FROM `waaBookInventoryDB`.`borrowedbooks` WHERE `idBook`="+bookIdInteger;
 		Statement stmtStatement = null;
 		try {
 			stmtStatement = conn.createStatement();
 			stmtStatement.addBatch(queryStringForChangingFieldValue);
 			stmtStatement.addBatch(deleteColumnFromBorrowTableString);
 			stmtStatement.executeBatch();
-			resultString = "Successfuly Returned.";
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
@@ -152,7 +154,6 @@ public class CRUDSupport {
 				e2.printStackTrace();
 			}
 		}
-		return resultString;
 	}
 	
 	/**
@@ -169,20 +170,17 @@ public class CRUDSupport {
 	 *            StudentID given by the student.
 	 */
 	public static void makeBorrowedPermanent(Connection conn,
-			Integer iSBNumberInteger, int idBook, int studentId) {
+			Integer iSBNumberInteger, int idBook, Integer studentId) {
 		Statement stmt = null;
 		try {
 			stmt = conn.createStatement();
 			String stringBorrowQuery = "UPDATE `waaBookInventoryDB`.`Book` SET `Availability`='Borrowed' WHERE `ISBN`='"
 					+ iSBNumberInteger + "'";
-			String stringJoinQuery = "INSERT INTO `waaBookInventoryDB`.`BooksBorrowed`(`idBook`,`idStudent`)VALUES("
-					+ idBook + "," + studentId + ")";
+			String stringJoinQuery = "INSERT INTO `waaBookInventoryDB`.`borrowedbooks` (`idBook`, `idStudent`) VALUES("+ idBook + "," + studentId + ")";
+			
 			stmt.addBatch(stringBorrowQuery);
 			stmt.addBatch(stringJoinQuery);
-			int[] recordsAffected = stmt.executeBatch();
-			for (int i : recordsAffected) {
-				System.out.println("records affected: " + i);
-			}
+			stmt.executeBatch();
 		} catch (SQLException e) {
 			e.printStackTrace();
 		} finally {
@@ -206,4 +204,51 @@ public class CRUDSupport {
 			e.printStackTrace();
 		}
 	}
+	
+
+	/**
+	 * Returns a book if, it belongs to the library and currently under borrowed state in the database.
+	 * @param conn connection to the database
+	 * @param iSBNumberInteger ISBNNumberof the book
+	 * @return Returns "yes" if returned successfully. Returns "no" if book is already present. Returns "norecord" if book doesn't belongs to the library.
+	 */
+	public static String isBookValidToReturn(Connection conn,
+			Integer iSBNumberInteger) {
+		String resString = "";
+		Statement stmt = null;
+		String queryString = "SELECT `ISBN`,`AVAILABILITY`,`idBook` FROM `waaBookInventoryDB`.`Book` WHERE `ISBN` = "
+				+iSBNumberInteger.toString()+";";
+		try {
+			stmt = conn.createStatement();
+			ResultSet resultSet = stmt.executeQuery(queryString);
+			if (!resultSet.next()){
+				resString = "norecord";
+			}
+			resultSet.beforeFirst();
+			while (resultSet.next()) {
+				BookInventoryServiceREST.bookId = resultSet.getInt(3);
+				String availabilityString = resultSet.getString(2);
+				if (availabilityString.equalsIgnoreCase("borrowed")){
+					resString ="yes";
+					break;
+				}
+				else {
+					resString = "no";
+					break;
+				}
+			}
+		}catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			if (stmt != null) {
+				try {
+					stmt.close();
+				} catch (SQLException closingStmtGetStudentDetailsException) {
+					closingStmtGetStudentDetailsException.printStackTrace();
+				}
+			}
+		}
+		return resString;
+	}
+
 }

@@ -1,10 +1,26 @@
-<service name="BookInventoryServiceREST">
+<service name="BookInventoryServiceREST" scope="application">
 	<description>
-		Please Type your service description here
+		RESTful Book Inventory Web service that receives and responds XML 
 	</description>
+	<transports>
+		<transport>http</transport>
+	</transports>
 	<messageReceivers>
-		<messageReceiver class="org.apache.axis2.rpc.receivers.RPCInOnlyMessageReceiver" mep="http://www.w3.org/2004/08/wsdl/in-only"/>
-		<messageReceiver class="org.apache.axis2.rpc.receivers.RPCMessageReceiver" mep="http://www.w3.org/2004/08/wsdl/in-out"/>
+		<messageReceiver mep="http://www.w3.org/2004/08/wsdl/in-only" class="org.apache.axis2.rpc.receivers.RPCInOnlyMessageReceiver" />
+		<messageReceiver  mep="http://www.w3.org/2004/08/wsdl/in-out"  class="org.apache.axis2.rpc.receivers.RPCMessageReceiver"/>
 	</messageReceivers>
 	<parameter locked="false" name="ServiceClass">au.edu.swin.waa.BookInventoryServiceREST</parameter>
+	<parameter name="disableSOAP11">true</parameter>
+	<parameter name="disableSOAP12">true</parameter>
+	
+	<operation name="borrowABookRequest">
+		<parameter name="RESTMethod">POST</parameter>
+		<parameter name="RESLocation">book</parameter>
+	</operation>
+	
+	<operation name="returnABook">
+		<parameter name="RESTMethod">POST</parameter>
+		<parameter name="RESTLocation">book</parameter>
+	</operation>
+	
 </service>
