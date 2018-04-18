@@ -2,13 +2,31 @@ package au.edu.swin.waa;
 
 import java.sql.Connection;
 
+
+import crudoperations.CRUDSupport;
+import book.Book;
+import book.GoogleBook;
+
 public class BookInventoryServiceREST {
-	/**
-	 * used to keep track of the unique book id of the a particular book when borrowing or returning it.
-	 */
-	static int bookId;	
 	
-	// All the of the functions goes here
+	public static String addBook(String bookDetails) {
+		String resultString = "No book found";
+		GoogleBook googleBook = new GenerateBookClasses().getMeBookClass(bookDetails);
+		
+		Connection conn = CRUDSupport.connectToDatabase();
+		String iSBNumberInteger = CRUDSupport.getISBN(conn, googleBook);
+		System.out.println("state of object: "+ googleBook.toString());
+//		Book book = CRUDSupport.returnACopyOfBook(conn, iSBNumberInteger);
+//		if (book == null){
+			CRUDSupport.addBookToDatabse(conn, googleBook);
+//			resultString = "Book is successfully added to the library";
+//		}
+//		else {
+//			resultString = "Book is already available at library";
+//		}
+		CRUDSupport.closeConnection(conn);
+		return resultString;
+	}
 
 	/**
 	 * If a book is present in the system log and currently under borrowed state
@@ -19,26 +37,21 @@ public class BookInventoryServiceREST {
 	 * @param iSBNumberInteger
 	 *            ISBN Number of the the book of type Integer
 	 * @return Returns different strings referring whether book has been
-	 *         returned or not.
+	 *         successfully returned or not.
 	 */
 	public static String returnABook(Integer iSBNumberInteger) {
-		String resultString = "";
+		String resultString = "norecord";
+		Book book = null;
 		Connection conn = CRUDSupport.connectToDatabase();
-		String isValidBookString = CRUDSupport.isBookValidToReturn(conn,
-				iSBNumberInteger);
-		switch (isValidBookString) {
-		case "yes":
-			CRUDSupport.returnBook(conn, iSBNumberInteger, BookInventoryServiceREST.bookId);
-			resultString = "yes";
-			break;
-		case "no":
-			resultString = "no";
-			break;
-		case "norecord":
-			resultString = "norecord";
-			break;
-		default:
-			break;
+		book = CRUDSupport.returnACopyOfBook(conn, iSBNumberInteger.toString());
+		if (book != null) {
+			if (book.getAvailability().equalsIgnoreCase("borrowed")) {
+				CRUDSupport
+						.returnBook(conn, iSBNumberInteger, book.getIdBook());
+				resultString = "yes";
+			} else {
+				resultString = "no";
+			}
 		}
 		CRUDSupport.closeConnection(conn);
 		return resultString;
@@ -62,25 +75,21 @@ public class BookInventoryServiceREST {
 	 */
 	public static String borrowABookRequest(Integer iSBNumberInteger,
 			Integer studentIDInteger) {
-		String resultString = "";
+		String resultString = "No Book found with given ISBN number. Try requesting from Google Book.";
+		Book book = null;
 		Connection conn = CRUDSupport.connectToDatabase();
-		resultString = CRUDSupport.isBookValid(conn, iSBNumberInteger);
-		switch (resultString) {
-		case "successfully borrowed": {
-			
-			CRUDSupport.makeBorrowedPermanent(conn, iSBNumberInteger, bookId,
-					studentIDInteger);
-			CRUDSupport.closeConnection(conn);
-			resultString = studentIDInteger.toString()+" has successfully borrowed book associated with this "+iSBNumberInteger+" ISBN number";
-			return resultString;
-
-		}
-		case "nobookfound":
-			resultString = "No Book found with given ISBN number. Try requesting from Google Book.";
-			break;
-		case "alreadyborrowed":
-			resultString = "Book is currently not availbale to be borrowed.";
-			break;
+		book = CRUDSupport.returnACopyOfBook(conn, iSBNumberInteger.toString());
+		if (book != null) {
+			if (book.getAvailability().equalsIgnoreCase("available")) {
+				CRUDSupport.makeBorrowedPermanent(conn, book.getIsbnNumber(),
+						book.getIdBook(), studentIDInteger);
+				CRUDSupport.closeConnection(conn);
+				resultString = studentIDInteger.toString()
+						+ " has successfully borrowed book associated with this "
+						+ iSBNumberInteger + " ISBN number";
+			} else {
+				resultString = "Book is currently not availbale to be borrowed.";
+			}
 		}
 		CRUDSupport.closeConnection(conn);
 		return resultString;
