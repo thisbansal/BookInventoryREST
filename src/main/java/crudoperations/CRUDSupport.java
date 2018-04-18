@@ -83,7 +83,7 @@ public class CRUDSupport {
 	 *            StudentID given by the student.
 	 */
 	public static void makeBorrowedPermanent(Connection conn,
-			Integer iSBNumberInteger, int idBook, Integer studentId) {
+			String iSBNumberInteger, Integer idBook, Integer studentId) {
 		Statement stmt = null;
 		try {
 			stmt = conn.createStatement();
@@ -133,31 +133,39 @@ public class CRUDSupport {
 	public static Book returnACopyOfBook(Connection conn,
 			String iSBNumberInteger) {
 		Book book = null;
-		Statement stmt = null;
-		// String queryBookTable =
-		// "SELECT `status`,`idBook`,`title`,`publisher` FROM `BookInventory`.`Book` WHERE `idBook` = "
-		// + "idBook" + ";";
-
-		String queryISBNTable = "SELECT `idBook`,`isbn13` FROM `BookInventory`.`ISBN` WHERE `idBook` = "
-				+ "idBook" + ";";
+		String queryISBNTable = "select idBook from BookInventory.ISBN where (isbn10 =?  or isbn13 = ?)";
+		Integer bookId = 0;
+		String titleString = "";
+		String statusString = "";
+		String averageRatingString = "";
 		try {
-			stmt = conn.createStatement();
-			ResultSet resultSet = stmt.executeQuery(queryISBNTable);
+			PreparedStatement preparedStatement = conn.prepareStatement(queryISBNTable);
+			preparedStatement.setString(1, iSBNumberInteger);
+			preparedStatement.setString(2, iSBNumberInteger);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			
 			while (resultSet.next()) {
-				book = new Book(resultSet.getInt(1), resultSet.getString(4),
-						resultSet.getString(2), resultSet.getInt(3));
+				bookId = resultSet.getInt(1);
 			}
+			if (bookId != 0){
+				queryISBNTable = "select title, status, averageRating from BookInventory.Book where idBook = ?";
+				preparedStatement = conn.prepareStatement(queryISBNTable);
+				preparedStatement.setInt(1, bookId);
+				resultSet = preparedStatement.executeQuery();
+				
+				while (resultSet.next()) {
+					titleString = resultSet.getString("title");
+					statusString = resultSet.getString("status");
+					averageRatingString = resultSet.getString("averageRating");
+				}
+
+				book = new Book(iSBNumberInteger, titleString, statusString, bookId, averageRatingString);
+			}
+			preparedStatement.close();
+			resultSet.close();
 		} catch (SQLException e) {
 			e.printStackTrace();
-		} finally {
-			if (stmt != null) {
-				try {
-					stmt.close();
-				} catch (SQLException closingStmtGetStudentDetailsException) {
-					closingStmtGetStudentDetailsException.printStackTrace();
-				}
-			}
-		}
+		} 
 		return book;
 	}
 

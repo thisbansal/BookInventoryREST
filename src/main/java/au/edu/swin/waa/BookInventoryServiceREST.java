@@ -2,7 +2,6 @@ package au.edu.swin.waa;
 
 import java.sql.Connection;
 
-
 import crudoperations.CRUDSupport;
 import book.Book;
 import book.GoogleBook;
@@ -10,27 +9,29 @@ import book.GoogleBook;
 public class BookInventoryServiceREST {
 	
 	/**
-	 * Adds a book to the database if it is not previously availbale at the library
+	 * Adds a book to the database if it is not previously available at the library
 	 * @param bookDetails JSON info about the book
 	 * @return String with different key string
 	 */
 	public static String addBook(String bookDetails) {
-//		String resultString = "No book found";
+		String resultString ="No Book Found with given ISBN Number";
+		System.out.println("here");
+		
 		GoogleBook googleBook = new GenerateBookClasses().getMeBookClass(bookDetails);
 		
 		Connection conn = CRUDSupport.connectToDatabase();
 		
-//		String iSBNumberInteger = CRUDSupport.getISBN(googleBook);
-//		System.out.println(CRUDSupport.getBookID(conn, googleBook));
-//		Book book = CRUDSupport.returnACopyOfBook(conn, iSBNumberInteger);
+		String iSBNumberInteger = CRUDSupport.getISBN(googleBook);
 		
-//		if (book == null){
+		Book book = CRUDSupport.returnACopyOfBook(conn, iSBNumberInteger);
+		
+		if (book == null && googleBook.getItems().length == 1){
 			CRUDSupport.addBookToDatabse(conn, googleBook);
-		String	resultString = "Book is successfully added to the library";
-//		}
-//		else {
-//			resultString = "Book is already available at library";
-//		}
+			resultString = "Book is successfully added to the library";
+		}
+		else if (book != null){
+			resultString = "Book is already available at library";
+		}
 		CRUDSupport.closeConnection(conn);
 		return resultString;
 	}
