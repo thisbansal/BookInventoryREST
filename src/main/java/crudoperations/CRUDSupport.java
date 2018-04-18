@@ -1,6 +1,7 @@
 package crudoperations;
 
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -133,12 +134,15 @@ public class CRUDSupport {
 			String iSBNumberInteger) {
 		Book book = null;
 		Statement stmt = null;
-		String queryString = "SELECT `ISBN`,`AVAILABILITY`,`idBook`,`nameBook`,`publisher` FROM `waaBookInventoryDB`.`Book` WHERE `ISBN` = "
-				+ iSBNumberInteger + ";";
+		// String queryBookTable =
+		// "SELECT `status`,`idBook`,`title`,`publisher` FROM `BookInventory`.`Book` WHERE `idBook` = "
+		// + "idBook" + ";";
 
+		String queryISBNTable = "SELECT `idBook`,`isbn13` FROM `BookInventory`.`ISBN` WHERE `idBook` = "
+				+ "idBook" + ";";
 		try {
 			stmt = conn.createStatement();
-			ResultSet resultSet = stmt.executeQuery(queryString);
+			ResultSet resultSet = stmt.executeQuery(queryISBNTable);
 			while (resultSet.next()) {
 				book = new Book(resultSet.getInt(1), resultSet.getString(4),
 						resultSet.getString(2), resultSet.getInt(3));
@@ -157,114 +161,127 @@ public class CRUDSupport {
 		return book;
 	}
 
+	/**
+	 * Updates database for book, authors, isbn numbers etc.
+	 * 
+	 * @param conn
+	 *            connection to the database;
+	 * @param googleBook
+	 *            Object of GoogleBook
+	 */
 	public static void addBookToDatabse(Connection conn, GoogleBook googleBook) {
 		insertToBookTable(conn, googleBook);
 		insertAuthorsToDatabase(conn, googleBook);
 		insertISBNToDatabase(conn, googleBook);
 	}
 
+	/**
+	 * Adds authors to the database
+	 * 
+	 * @param connection
+	 *            to the database;
+	 * @param googleBook
+	 *            Object of GoogleBook
+	 */
 	public static void insertAuthorsToDatabase(Connection conn,
 			GoogleBook googleBook) {
 		Integer bookID = CRUDSupport.getBookID(conn, googleBook);
 		String[] authorsString = googleBook.getItems()[0].getVolumeInfo()
 				.getAuthors();
+		String insertAuthorsString = "insert into BookInventory.Authors (idbook, nameAuthor)"
+		        + " values (?, ?)";
 		for (String name : authorsString) {
-			String insertAuthorsString = "INSERT INTO `BookInventory`.`Authors` (`idBook`, `nameAuthor`)"
-					+ " VALUES ('" + bookID + "', '" + name + "');";
-			System.out.println("------------------------------------------------\n"+insertAuthorsString);
-			/*
-			 * Statement stmt = null; try { stmt = conn.createStatement();
-			 * stmt.execute(insertAuthorsString); stmt.close();
-			 * System.out.println("Inside Authors Table"); } catch (SQLException e)
-			 * { e.printStackTrace(); }
-			 */
+			try {
+				PreparedStatement preparedStmt = conn.prepareStatement(insertAuthorsString);
+			      preparedStmt.setInt    (1, bookID);
+			      preparedStmt.setString (2, name);
+			      preparedStmt.executeUpdate();
+				 preparedStmt.close();
+				preparedStmt.close();
+			} catch (SQLException e) {
+				System.out.println("Something wrong with insert Authour.");
+			}
+
 		}
 	}
 
+	/**
+	 * Adds ISBN to the database
+	 * 
+	 * @param conn
+	 *            connection to the database
+	 * @param googleBook
+	 *            Object of Google Book
+	 */
 	public static void insertISBNToDatabase(Connection conn,
 			GoogleBook googleBook) {
-		
-		IndustryIdentifiers[] identifiers = googleBook.getItems()[0].getVolumeInfo().getIndustryIdentifiers();
-		String isbn_10="";
-		String isbn_13="";
-		
-		for(IndustryIdentifiers identifier : identifiers){
-			if (identifier.getType().equals("ISBN_10")){
+		IndustryIdentifiers[] identifiers = googleBook.getItems()[0]
+				.getVolumeInfo().getIndustryIdentifiers();
+		String isbn_10 = "";
+		String isbn_13 = "";
+		for (IndustryIdentifiers identifier : identifiers) {
+			if (identifier.getType().equals("ISBN_10")) {
 				isbn_10 = identifier.getIdentifier();
-			}
-			else {
+			} else {
 				isbn_13 = identifier.getIdentifier();
 			}
 		}
-		String insertIntoISBNTableString = "INSERT INTO `BookInventory`.`ISBN` "
-				+ "(`isbn10`, `isbn13`, `idBook`) VALUES"
-				+ "('"
-				+ isbn_10
-				+ "', '"
-				+ isbn_13
-				+ "', '"
-				+ CRUDSupport.getBookID(conn, googleBook) + "');";
-		
-		System.out.println("-----------------------------------------------------\n"+insertIntoISBNTableString);
-		// Statement stmt = null;
-		// try {
-		// stmt = conn.createStatement();
-		// stmt.execute(insertIntoISBNTableString);
-		// stmt.close();
-		// System.out.println("Inside ISBN Table");
-		// } catch (SQLException e) {
-		// e.printStackTrace();
-		// }
-
-	}
-
-	public static void insertToBookTable(Connection conn, GoogleBook googleBook) {
-		String averageRatingString = googleBook.getItems()[0].getVolumeInfo()
-				.getAverageRating();
-		String insertIntoBookTable = "";
-		if (!averageRatingString.isEmpty()) {
-			insertIntoBookTable = "INSERT INTO `BookInventory`.`Book` "
-					+ "(`title`, `publisher`, `publishedDate`, `status`, `averageRating`) "
-					+ "VALUES ('"
-					+ googleBook.getItems()[0].getVolumeInfo().getTitle()
-					+ "', '"
-					+ googleBook.getItems()[0].getVolumeInfo().getPublisher()
-					+ "', '"
-					+ googleBook.getItems()[0].getVolumeInfo()
-							.getPublishedDate() + "', 'availbale', '"
-					+ averageRatingString + "');";
-		} else {
-			insertIntoBookTable = "INSERT INTO `BookInventory`.`Book` "
-					+ "(`title`, `publisher`, `publishedDate`, `status`) "
-					+ "VALUES ('"
-					+ googleBook.getItems()[0].getVolumeInfo().getTitle()
-					+ "', '"
-					+ googleBook.getItems()[0].getVolumeInfo().getPublisher()
-					+ "', '"
-					+ googleBook.getItems()[0].getVolumeInfo()
-							.getPublishedDate() + "', 'availbale');";
+		String insertIntoisbnTable = "insert into BookInventory.ISBN (isbn10, isbn13, idBook)"
+		        + " values (?, ?, ?)";
+		 try {
+			  PreparedStatement preparedStmt = conn.prepareStatement(insertIntoisbnTable);
+		      preparedStmt.setString (1, isbn_10);
+		      preparedStmt.setString (2, isbn_13);
+		      preparedStmt.setInt    (3, CRUDSupport.getBookID(conn, googleBook));
+		      preparedStmt.executeUpdate();
+			 preparedStmt.close();
+		 } catch (SQLException e) {
+			System.out.println("Something wrong with insert ISBN.");
 		}
 
-		System.out.println("-------------------------------------------\n"+insertIntoBookTable + "\n");
-		// Statement stmt = null;
-		// try {
-		// stmt = conn.createStatement();
-		// stmt.execute(insertIntoBookTable);
-		// stmt.close();
-		// System.out.println("Inside Book Table");
-		// } catch (SQLException e) {
-		// e.printStackTrace();
-		// }
 	}
 
+	/**
+	 * Adds Book info to the database
+	 * 
+	 * @param conn
+	 *            connection to the database
+	 * @param googleBook
+	 *            Object of Google Book
+	 */
+	public static void insertToBookTable(Connection conn, GoogleBook googleBook) {
+		String insertIntoBookTable = "insert into BookInventory.Book (title, publisher, publishedDate, status, averageRating)"
+		        + " values (?, ?, ?, ?, ?)";
+		 try {
+			  PreparedStatement preparedStmt = conn.prepareStatement(insertIntoBookTable);
+		      preparedStmt.setString (1, googleBook.getItems()[0].getVolumeInfo().getTitle());
+		      preparedStmt.setString (2, googleBook.getItems()[0].getVolumeInfo().getPublisher());
+		      preparedStmt.setString (3, googleBook.getItems()[0].getVolumeInfo().getPublishedDate());
+		      preparedStmt.setString (4, "availbale");
+		      preparedStmt.setString (5, googleBook.getItems()[0].getVolumeInfo().getAverageRating());
+		      preparedStmt.executeUpdate();
+			 preparedStmt.close();
+		 } catch (SQLException e) {
+			 System.out.println("Something wrong with Insert into book table.");
+			 e.printStackTrace();
+		 }
+	}
+
+	/**
+	 * Gets the BookID of the current Book in question
+	 * 
+	 * @param conn
+	 *            connection to the database
+	 * @param googleBook
+	 *            object of the GoogleBook class
+	 * @return
+	 */
 	public static Integer getBookID(Connection conn, GoogleBook googleBook) {
 		Integer bookID = null;
 		try {
 			String getBookIDFromBookTable = "SELECT `idBook` FROM `BookInventory`.`Book` WHERE `title` = \""
 					+ googleBook.getItems()[0].getVolumeInfo().getTitle()
 					+ "\";";
-			System.out.println("--------------------------------------------------------\n"
-					+ getBookIDFromBookTable);
 			Statement stmt = conn.createStatement();
 			ResultSet resultSet = stmt.executeQuery(getBookIDFromBookTable);
 			while (resultSet.next()) {
@@ -272,17 +289,25 @@ public class CRUDSupport {
 			}
 			stmt.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
+			System.out.println("Something wrong with Select statemen. Get Book ID.");
 		}
 		return bookID;
 	}
 
-	public static String getISBN(Connection conn, GoogleBook googleBook) {
-		IndustryIdentifiers[] identifiers = googleBook.getItems()[0].getVolumeInfo().getIndustryIdentifiers();
-		String isbn_13="";
-		
-		for(IndustryIdentifiers identifier : identifiers){
-			if (identifier.getType().equals("ISBN_13")){
+	/**
+	 * Returns the ISBN number of the Book from Json
+	 * 
+	 * @param googleBook
+	 *            Object of the class GoogleBook
+	 * @return Returns a copy of the ISBN number in string format
+	 */
+	public static String getISBN(GoogleBook googleBook) {
+		IndustryIdentifiers[] identifiers = googleBook.getItems()[0]
+				.getVolumeInfo().getIndustryIdentifiers();
+		String isbn_13 = "";
+
+		for (IndustryIdentifiers identifier : identifiers) {
+			if (identifier.getType().equals("ISBN_13")) {
 				isbn_13 = identifier.getIdentifier();
 			}
 		}

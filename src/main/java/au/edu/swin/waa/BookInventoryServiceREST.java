@@ -9,17 +9,24 @@ import book.GoogleBook;
 
 public class BookInventoryServiceREST {
 	
+	/**
+	 * Adds a book to the database if it is not previously availbale at the library
+	 * @param bookDetails JSON info about the book
+	 * @return String with different key string
+	 */
 	public static String addBook(String bookDetails) {
-		String resultString = "No book found";
+//		String resultString = "No book found";
 		GoogleBook googleBook = new GenerateBookClasses().getMeBookClass(bookDetails);
 		
 		Connection conn = CRUDSupport.connectToDatabase();
-		String iSBNumberInteger = CRUDSupport.getISBN(conn, googleBook);
-		System.out.println("state of object: "+ googleBook.toString());
+		
+//		String iSBNumberInteger = CRUDSupport.getISBN(googleBook);
+//		System.out.println(CRUDSupport.getBookID(conn, googleBook));
 //		Book book = CRUDSupport.returnACopyOfBook(conn, iSBNumberInteger);
+		
 //		if (book == null){
 			CRUDSupport.addBookToDatabse(conn, googleBook);
-//			resultString = "Book is successfully added to the library";
+		String	resultString = "Book is successfully added to the library";
 //		}
 //		else {
 //			resultString = "Book is already available at library";
