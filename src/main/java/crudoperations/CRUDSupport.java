@@ -5,8 +5,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Properties;
 import java.sql.Connection;
+
+import com.sun.xml.internal.bind.v2.runtime.unmarshaller.XsiNilLoader.Array;
+import com.sun.xml.internal.ws.client.Stub;
 
 import book.Book;
 import book.GoogleBook;
@@ -45,28 +50,21 @@ public class CRUDSupport {
 	 * @param bookIdInteger
 	 * @return String with information about the returning book
 	 */
-	public static void returnBook(Connection conn, Integer iSBNNumberInteger,
-			Integer bookIdInteger) {
-		String queryStringForChangingFieldValue = "UPDATE `waaBookInventoryDB`.`Book` SET `Availability`='Available' WHERE `ISBN`='"
-				+ iSBNNumberInteger + "'";
-		String deleteColumnFromBorrowTableString = "DELETE FROM `waaBookInventoryDB`.`borrowedbooks` WHERE `idBook`="
-				+ bookIdInteger;
-		Statement stmtStatement = null;
+	public static void returnBook(Connection conn, Book book) {
 		try {
-			stmtStatement = conn.createStatement();
-			stmtStatement.addBatch(queryStringForChangingFieldValue);
-			stmtStatement.addBatch(deleteColumnFromBorrowTableString);
-			stmtStatement.executeBatch();
+			String stringReturnQuery = "update BookInventory.Book set status = ? where idBook = ?";
+			String stringJoinTableQuery = "delete from BookInventory.BorrowBook where idBook = ?";
+			PreparedStatement preparedStatement = conn.prepareStatement(stringReturnQuery);
+			preparedStatement.setString(1, "available");
+			preparedStatement.setInt(2, book.getIdBook());
+			preparedStatement.executeUpdate();
+			preparedStatement = conn.prepareStatement(stringJoinTableQuery);
+			preparedStatement.setInt(1, book.getIdBook());
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
 		} catch (SQLException e) {
 			e.printStackTrace();
-		} finally {
-			try {
-				if (stmtStatement != null)
-					stmtStatement.close();
-			} catch (SQLException e2) {
-				e2.printStackTrace();
-			}
-		}
+		} 
 	}
 
 	/**
@@ -82,29 +80,30 @@ public class CRUDSupport {
 	 * @param studentId
 	 *            StudentID given by the student.
 	 */
-	public static void makeBorrowedPermanent(Connection conn,
-			String iSBNumberInteger, Integer idBook, Integer studentId) {
-		Statement stmt = null;
+	public static void makeBorrowedPermanent(Connection conn,Book book, String studentID, String order) {
 		try {
-			stmt = conn.createStatement();
-			String stringBorrowQuery = "UPDATE `waaBookInventoryDB`.`Book` SET `Availability`='Borrowed' WHERE `ISBN`='"
-					+ iSBNumberInteger + "'";
-			String stringJoinQuery = "INSERT INTO `waaBookInventoryDB`.`borrowedbooks` (`idBook`, `idStudent`) VALUES("
-					+ idBook + "," + studentId + ")";
+			Integer studentIDInteger = Integer.parseInt(studentID);
+			String stringBorrowQuery = "update BookInventory.Book set status = ? where idBook = ?";
+			String stringJoinQueryForBorrow = "insert into BookInventory.BorrowBook (idBook, idStudent) values (?,?)";
+			String stringJoinQueryForPurchase = "insert into BookInventory.PurchasedBook (idBook, idStudent) values (?,?)";
+			PreparedStatement preparedStatement = conn.prepareStatement(stringBorrowQuery);
+			preparedStatement.setString(1, order);
+			preparedStatement.setInt(2, book.getIdBook());
+			preparedStatement.executeUpdate();
+			if (order.equalsIgnoreCase("purchased")){
+				preparedStatement = conn.prepareStatement(stringJoinQueryForPurchase);
+			}
+			else {
 
-			stmt.addBatch(stringBorrowQuery);
-			stmt.addBatch(stringJoinQuery);
-			stmt.executeBatch();
+				preparedStatement = conn.prepareStatement(stringJoinQueryForBorrow);
+			}
+			preparedStatement.setInt(1, book.getIdBook());
+			preparedStatement.setInt(2, studentIDInteger);
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
 		} catch (SQLException e) {
 			e.printStackTrace();
-		} finally {
-			try {
-				if (stmt != null)
-					stmt.close();
-			} catch (SQLException e2) {
-				e2.printStackTrace();
-			}
-		}
+		} 
 	}
 
 	/**
@@ -177,10 +176,34 @@ public class CRUDSupport {
 	 * @param googleBook
 	 *            Object of GoogleBook
 	 */
-	public static void addBookToDatabse(Connection conn, GoogleBook googleBook) {
+	public static void addBookToDatabse(Connection conn, GoogleBook googleBook, Integer idStudent) {
 		insertToBookTable(conn, googleBook);
 		insertAuthorsToDatabase(conn, googleBook);
 		insertISBNToDatabase(conn, googleBook);
+		insertToRequestedTable(conn, googleBook, idStudent);
+	}
+	
+	/**
+	 * Inserts Requested book info into the Requested table.
+	 * 
+	 * @param conn
+	 *            connection to the database;
+	 * @param googleBook
+	 *            Object of GoogleBook
+	 */
+	public static void insertToRequestedTable(Connection conn, GoogleBook googleBook, Integer idStudent){
+		Integer bookID = CRUDSupport.getBookID(conn, googleBook);
+		String insertAuthorsString = "insert into BookInventory.Requested (idbook, idStudent) values (?, ?)";
+		try {
+			PreparedStatement preparedStmt = conn.prepareStatement(insertAuthorsString);
+		      preparedStmt.setInt    (1, bookID);
+		      preparedStmt.setInt (2, idStudent);
+		      preparedStmt.executeUpdate();
+		      preparedStmt.close();
+		      preparedStmt.close();
+		} catch (SQLException e) {
+			System.out.println("Something wrong with insert RequestedTable update query.");
+		}
 	}
 
 	/**
@@ -196,8 +219,7 @@ public class CRUDSupport {
 		Integer bookID = CRUDSupport.getBookID(conn, googleBook);
 		String[] authorsString = googleBook.getItems()[0].getVolumeInfo()
 				.getAuthors();
-		String insertAuthorsString = "insert into BookInventory.Authors (idbook, nameAuthor)"
-		        + " values (?, ?)";
+		String insertAuthorsString = "insert into BookInventory.Authors (idbook, nameAuthor) values (?, ?)";
 		for (String name : authorsString) {
 			try {
 				PreparedStatement preparedStmt = conn.prepareStatement(insertAuthorsString);
@@ -265,7 +287,7 @@ public class CRUDSupport {
 		      preparedStmt.setString (1, googleBook.getItems()[0].getVolumeInfo().getTitle());
 		      preparedStmt.setString (2, googleBook.getItems()[0].getVolumeInfo().getPublisher());
 		      preparedStmt.setString (3, googleBook.getItems()[0].getVolumeInfo().getPublishedDate());
-		      preparedStmt.setString (4, "availbale");
+		      preparedStmt.setString (4, "back order");
 		      preparedStmt.setString (5, googleBook.getItems()[0].getVolumeInfo().getAverageRating());
 		      preparedStmt.executeUpdate();
 			 preparedStmt.close();
@@ -297,7 +319,7 @@ public class CRUDSupport {
 			}
 			stmt.close();
 		} catch (SQLException e) {
-			System.out.println("Something wrong with Select statemen. Get Book ID.");
+			System.out.println("Something wrong with Select statement. Get Book ID.");
 		}
 		return bookID;
 	}
@@ -320,5 +342,96 @@ public class CRUDSupport {
 			}
 		}
 		return isbn_13;
+	}
+
+	public static ArrayList<String> getAllBooks(Connection conn) {
+		ArrayList<String> allDataStrings = new ArrayList<String>();
+		ArrayList<String> title = new ArrayList<String>();
+		ArrayList<String> publisher= new ArrayList<String>();
+		ArrayList<String> status = new ArrayList<String>();
+		ArrayList<String> averageRating = new ArrayList<String>();
+		ArrayList<String> isbn = new ArrayList<String>();
+		String queryString = "select title, publisher, status, averageRating from BookInventory.Book";
+		String queryISBN = "select isbn10 from BookInventory.ISBN";
+		try{
+			PreparedStatement preparedStatement = conn.prepareStatement(queryString);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()){
+				title.add(resultSet.getString(1));
+				int index = title.size()-1;
+				if (title.get(index).length()>40) title.set(index, title.get(index).substring(0, 40)+"..."); ;
+				publisher.add(resultSet.getString(2));
+				status.add(resultSet.getString(3));
+				averageRating.add(resultSet.getString(4));
+			}
+			preparedStatement = conn.prepareStatement(queryISBN);
+			resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()){
+				isbn.add(resultSet.getString(1));
+			}
+			preparedStatement.close();
+			resultSet.close();
+			for (int i =0; i< title.size(); i++) {
+				String dataString = title.get(i) +" published by "+publisher.get(i)+"."+" It's currently under \""+status.get(i)+"\" status. "+"It's rating and ISBN is "+averageRating.get(i)+" and "+isbn.get(i)+" resp.";
+				allDataStrings.add(dataString);
+			}
+		}
+		
+		catch (SQLException e) {
+			System.out.println("Something wrong with view all books prepared statement.");
+		}
+		return allDataStrings;
+	}
+
+	public static ArrayList<String> getBorrowedBooks(Connection conn, Integer idStudent) {
+		ArrayList<String> booksBorrowed = new ArrayList<String>();
+		ArrayList<Integer> idBook = new ArrayList<Integer>();
+		ArrayList<String> isbn = new ArrayList<String>();
+		ArrayList<String> title = new ArrayList<String>();
+		ArrayList<String> status = new ArrayList<String>();
+		String queryString = "select idBook from BookInventory.BorrowBook where idStudent = ?";
+		String queryTitle = "select title,status from BookInventory.Book where idBook = ?";
+		String queryISBN = "select isbn10 from BookInventory.ISBN where idBook = ?";
+		try{
+			PreparedStatement preparedStatement = conn.prepareStatement(queryString);
+			preparedStatement.setInt(1, idStudent);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()){
+				idBook.add(resultSet.getInt(1));
+				System.out.println(resultSet.getInt(1));
+			}
+			for (Integer idString : idBook){
+				preparedStatement = conn.prepareStatement(queryTitle);
+				preparedStatement.setInt(1, idString);
+				resultSet = preparedStatement.executeQuery();
+				while (resultSet.next()){
+					title.add(resultSet.getString(1));
+					int index = title.size()-1;
+					if (title.get(index).length()>40) title.set(index, title.get(index).substring(0, 40)+"..."); ;
+					status.add(resultSet.getString(2));
+				}
+			}
+			for (Integer idInteger : idBook){
+				preparedStatement = conn.prepareStatement(queryISBN);
+				preparedStatement.setInt(1, idInteger);
+				resultSet = preparedStatement.executeQuery();
+				while (resultSet.next()){
+					isbn.add(resultSet.getString(1));
+				}
+			}
+			System.out.println(isbn.toString());
+			preparedStatement.close();
+			resultSet.close();
+			for (int i =0; i< idBook.size(); i++) {
+				String dataString = "Student "+idStudent+", has "+status.get(i)+" "+title.get(i)+" book. Book's ISBN is "+isbn.get(i);
+				booksBorrowed.add(dataString);
+			}
+		}
+		
+		catch (SQLException e) {
+			System.out.println("Something wrong with view all books prepared statement.");
+			e.printStackTrace();
+		}
+		return booksBorrowed;
 	}
 }
