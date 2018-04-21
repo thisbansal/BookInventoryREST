@@ -2,7 +2,6 @@ package au.edu.swin.waa;
 
 import java.sql.Connection;
 import java.util.ArrayList;
-import java.util.Arrays;
 
 import crudoperations.CRUDSupport;
 import book.Book;
@@ -16,7 +15,6 @@ public class BookInventoryServiceREST {
 	 * @return String with different key string
 	 */
 	public static String addBook(String bookDetails, Integer idStudent) {
-//		System.out.println("inside function");
 		GoogleBook googleBook = new GenerateBookClasses().getMeBookClass(bookDetails);
 		String resultString ="No Book Found with given ISBN Number";
 		String iSBNumberInteger = CRUDSupport.getISBN(googleBook);
@@ -24,31 +22,24 @@ public class BookInventoryServiceREST {
 		String sellableString = googleBook.getItems()[0].getSaleInfo().getSaleability();
 		String countryString = googleBook.getItems()[0].getSaleInfo().getCountry();
 		if (countryString.equalsIgnoreCase("au")) {
-//			System.out.println("inside countryString");
 			if (sellableString.equalsIgnoreCase("FOR_SALE")|| sellableString.equalsIgnoreCase("FOR_SALE_AND_RENTAL")) {
-//				System.out.println("inside sellable");
 				Double rating = Double.parseDouble(googleBook.getItems()[0].getVolumeInfo().getAverageRating());
 				if (rating != null && rating >=3.5){
-//					System.out.println("inside rating: " + rating);
 					Book book = CRUDSupport.returnACopyOfBook(conn, iSBNumberInteger);
 					if (book == null && googleBook.getItems().length == 1){
-//						System.out.println("inside book if");
 						CRUDSupport.addBookToDatabse(conn, googleBook, idStudent);
 						resultString = "Book is successfully added to the library";
 					}
 					else if (book != null){
-//						System.out.println("inside else if for book");
 						resultString = "Book is already available at library";
 					}
 				}
 				else {
-//					System.out.println("inside rating else");
 					resultString = "The rating standard of the requested book doesn't complies well with library standards."+
 									" Try requesting another book.";
 				}
 			}
 			else {
-//				System.out.println("Inside outside country else");
 				resultString = "Book cannot be request for students from "+countryString;
 			}
 		}
@@ -120,6 +111,11 @@ public class BookInventoryServiceREST {
 		return resultString;
 	}
 	
+	
+	/**
+	 * Returns all of the books info available at library
+	 * @return Returns a string of books info
+	 */
 	public static String viewAllBooks(){
 		ArrayList<String> dataString = new ArrayList<String>();
 		String resultString = "";
@@ -132,6 +128,12 @@ public class BookInventoryServiceREST {
 		return resultString;
 	}
 	
+	
+	/**
+	 * Displays a record of all borrowed books
+	 * @param idStudent Student who have borrowed the books
+	 * @return Returns a String of info about borrowed books
+	 */
 	public static String viewBorrowedBooks(Integer idStudent){
 		String resultString = "";
 		ArrayList<String> dataStrings = new ArrayList<String>();
@@ -141,19 +143,54 @@ public class BookInventoryServiceREST {
 		for (String string : dataStrings) {
 			resultString += "\n"+string+"\n";
 		}
-		System.out.println(resultString);
+		return resultString;
+	}
+	
+	
+	/**
+	 * Displays the info about a particular book
+	 * @param isbnNumberString ISBN of the requested book
+	 * @return Returns a string of book info
+	 */
+	public static String bookDetails(String isbnNumberString){
+		String resultString = "No Book Found with given ISBN Number";
+		Connection conn = CRUDSupport.connectToDatabase();
+		Book book = CRUDSupport.returnACopyOfBook(conn, isbnNumberString);
+		if (book!=null){
+			resultString = "\nBook "+book.getTitle()+" is available at library. Its ISBN is "+book.getIsbnNumber()+
+							". \nIts current status is "+book.getStatus()+". Its rating is "+book.getAverageRating()+".\n";
+		}
 		return resultString;
 	}
 
-	public static String addABookToLibrary(String title, String publisher, String publishedDate, 
+	
+	/**
+ 	 * Adds a new book to the database
+ 	 *  
+	 * @param title Title of the book
+	 * @param publisher publisher of the book
+	 * @param publishedDate Date when the book was published
+	 * @param rating Rating of the book
+	 * @param authors Author(s) of the book
+	 * @param ISBN ISBN Number of the book
+	 * @return Returns a string stating whether a book has been added successfully or not
+	 */
+	public static String addANewBook(String title, String publisher, String publishedDate, 
 				Double rating, String authors, String ISBN){
-		String resultString = "Some info is missing";
-		Connection conn = CRUDSupport.connectToDatabase();
-		if (rating != null && rating >=3.5 && rating <=5.0){
-			System.out.println("inside rating: " + rating);
-			
+		String resultString = "Unacceptable book information provided.";
+		Book book = null;
+		if (!title.isEmpty()&&!publisher.isEmpty()&&!publishedDate.isEmpty()&&
+				!authors.isEmpty()&&!ISBN.isEmpty()&&rating!=null&&rating>=3.5&&rating<=5.0) {
+			Connection conn = CRUDSupport.connectToDatabase();
+			book = CRUDSupport.returnANewBook(title, publisher, publishedDate,rating, authors, ISBN);
+			if (book == null){
+				CRUDSupport.closeConnection(conn);
+				return resultString = "Unacceptable ISBN";
+			}
+			CRUDSupport.addANewBook(conn, book);
+			resultString = "Book Successfully Added to the library.";
+			CRUDSupport.closeConnection(conn);
 		}
-		CRUDSupport.closeConnection(conn);
 		return resultString;
 	}
 }

@@ -76,6 +76,7 @@ public class CRUDSupport {
 	 * @param studentId
 	 *            StudentID given by the student.
 	 */
+	@SuppressWarnings("resource")
 	public static void makeBorrowedPermanent(Connection conn,Book book, String studentID, String order) {
 		try {
 			Integer studentIDInteger = Integer.parseInt(studentID);
@@ -340,6 +341,12 @@ public class CRUDSupport {
 		return isbn_13;
 	}
 
+	
+	/**
+	 * Returns a copy of all of the books
+	 * @param conn Connection to the database
+	 * @return Returns a String value with info about all of the book
+	 */
 	public static ArrayList<String> getAllBooks(Connection conn) {
 		ArrayList<String> allDataStrings = new ArrayList<String>();
 		ArrayList<String> title = new ArrayList<String>();
@@ -379,6 +386,13 @@ public class CRUDSupport {
 		return allDataStrings;
 	}
 
+	
+	/**
+	 * Returns a copy of borrowed Books
+	 * @param conn Connection to the database
+	 * @param idStudent student id
+	 * @return Returns a string showing all of the books
+	 */
 	public static ArrayList<String> getBorrowedBooks(Connection conn, Integer idStudent) {
 		ArrayList<String> booksBorrowed = new ArrayList<String>();
 		ArrayList<Integer> idBook = new ArrayList<Integer>();
@@ -394,7 +408,6 @@ public class CRUDSupport {
 			ResultSet resultSet = preparedStatement.executeQuery();
 			while (resultSet.next()){
 				idBook.add(resultSet.getInt(1));
-				System.out.println(resultSet.getInt(1));
 			}
 			for (Integer idString : idBook){
 				preparedStatement = conn.prepareStatement(queryTitle);
@@ -415,7 +428,6 @@ public class CRUDSupport {
 					isbn.add(resultSet.getString(1));
 				}
 			}
-			System.out.println(isbn.toString());
 			preparedStatement.close();
 			resultSet.close();
 			for (int i =0; i< idBook.size(); i++) {
@@ -429,5 +441,157 @@ public class CRUDSupport {
 			e.printStackTrace();
 		}
 		return booksBorrowed;
+	}
+
+	
+	/**
+	 * Returns a copy of Book with given details
+	 * @param title Title of the book
+	 * @param publisher Publisher of the book
+	 * @param publishedDate PublishedDate of the book
+	 * @param rating Rating of the book
+	 * @param authors Author(s) of the book
+	 * @param iSBN ISBN Of the book
+	 * @return Returns Book object
+	 */
+	public static Book returnANewBook(String title, String publisher,
+			String publishedDate, Double rating, String authorsStr, String iSBN) {
+		Book book = null;
+		String[] authors = authorsStr.split(",");
+		String[] isbns = iSBN.split(",");
+		for (String isbn : isbns){
+			if (isbn.length()!=10 && isbn.length()!=13 && !isNumeric(isbn)){
+				return book;
+			}
+		}
+		String status = "available";
+		book = new Book(title, status, isbns[0], isbns[1], rating.toString(), publisher, publishedDate, authors);
+		return book;
+	}
+
+	
+	/**
+	 * Checks if ISBN is numeric
+	 * @param str ISBN String
+	 * @return Returns true if passed ISBN is numeric otherwise false
+	 */
+	public static boolean isNumeric(String str)  
+	{  
+	  try  
+	  {
+	    Double.parseDouble(str);  
+	  }  
+	  catch(NumberFormatException nfe)  
+	  {  
+	    return false;  
+	  }  
+	  return true;  
+	}
+
+	public static void addANewBook(Connection conn, Book book) {
+		insertToBookTable(conn, book);
+		insertISBNToDatabase(conn, book);
+		insertAuthorsToDatabase(conn, book);
+	}
+	
+	/**
+	 * Adds Book info to the database
+	 * 
+	 * @param conn
+	 *            connection to the database
+	 * @param Book book
+	 *            Object of Book
+	 */
+	public static void insertToBookTable(Connection conn, Book book) {
+		String insertIntoBookTable = "insert into BookInventory.Book (title, publisher, publishedDate, status, averageRating)"
+		        + " values (?, ?, ?, ?, ?)";
+		 try {
+			  PreparedStatement preparedStmt = conn.prepareStatement(insertIntoBookTable);
+		      preparedStmt.setString (1, book.getTitle());
+		      preparedStmt.setString (2, book.getPublisher());
+		      preparedStmt.setString (3, book.getPublishedDate());
+		      preparedStmt.setString (4, book.getStatus());
+		      preparedStmt.setString (5, book.getAverageRating());
+		      preparedStmt.executeUpdate();
+			 preparedStmt.close();
+		 } catch (SQLException e) {
+			 System.out.println("Something wrong with Insert into book table.");
+			 e.printStackTrace();
+		 }
+	}
+	
+	/**
+	 * Adds ISBN to the database
+	 * 
+	 * @param conn
+	 *            connection to the database
+	 * @param book
+	 *            Object of Book
+	 */
+	public static void insertISBNToDatabase(Connection conn, Book book) {
+		String insertIntoisbnTable = "insert into BookInventory.ISBN (isbn10, isbn13, idBook)"
+		        + " values (?, ?, ?)";
+		 try {
+			  PreparedStatement preparedStmt = conn.prepareStatement(insertIntoisbnTable);
+		      preparedStmt.setString (1, book.getIsbnNumber());
+		      preparedStmt.setString (2, book.getIsbnNumber13());
+		      preparedStmt.setInt    (3, CRUDSupport.getBookID(conn, book));
+		      preparedStmt.executeUpdate();
+			 preparedStmt.close();
+		 } catch (SQLException e) {
+			System.out.println("Something wrong with insert ISBN.");
+		}
+	}
+	
+	/**
+	 * Gets the BookID of the current Book in question
+	 * 
+	 * @param conn
+	 *            connection to the database
+	 * @param book
+	 *            object of the Book class
+	 * @return
+	 */
+	public static Integer getBookID(Connection conn, Book book) {
+		Integer bookID = null;
+		try {
+			String getBookIDFromBookTable = "SELECT `idBook` FROM `BookInventory`.`Book` WHERE `title` = \""
+					+ book.getTitle()
+					+ "\";";
+			Statement stmt = conn.createStatement();
+			ResultSet resultSet = stmt.executeQuery(getBookIDFromBookTable);
+			while (resultSet.next()) {
+				bookID = resultSet.getInt(1);
+			}
+			stmt.close();
+		} catch (SQLException e) {
+			System.out.println("Something wrong with Select statement. Get Book ID.");
+		}
+		return bookID;
+	}
+	
+	/**
+	 * Adds authors to the database
+	 * 
+	 * @param connection
+	 *            to the database;
+	 * @param book
+	 *            Object of Book
+	 */
+	public static void insertAuthorsToDatabase(Connection conn, Book book) {
+		String insertAuthorsString = "insert into BookInventory.Authors (idbook, nameAuthor) values (?, ?)";
+		for (String name : book.getAuthors()) {
+			try {
+				PreparedStatement preparedStmt = conn.prepareStatement(insertAuthorsString);
+			      preparedStmt.setInt    (1, CRUDSupport.getBookID(conn, book));
+			      preparedStmt.setString (2, name);
+			      preparedStmt.executeUpdate();
+				 preparedStmt.close();
+				preparedStmt.close();
+			} catch (SQLException e) {
+				System.out.println("Something wrong with insert Authour.");
+			}
+
+		}
 	}
 }
